@@ -20,15 +20,6 @@ python atari_baseline_test.py --model pong_dqn_cnn_6000000 --record
 python atari_baseline_train.py --algorithm dqn --env ALE/Breakout-v5 --timesteps infinite
 ```
 
-## 🧠 Supported Algorithms
-
-| Algorithm | Policy Type | Best For | Training Time |
-|-----------|-------------|----------|---------------|
-| **PPO** | CNN/MLP | Most games, stable training | 1-2 hours |
-| **DQN** | CNN | Discrete actions, value-based | 1-3 hours |
-| **A2C** | MLP | Simple environments | 30 min - 1 hour |
-| **A2C (CNN)** | CNN | Complex visual environments | 1-2 hours |
-
 ## Files
 
 - `atari_baseline_train.py` - Generic training script for all algorithms
