@@ -226,6 +226,27 @@ Watch our trained Deep Q-Network (DQN) agent playing Space Invaders after 7.5 mi
 
 The agent demonstrates effective gameplay by learning to prioritize targets, use shields strategically, and maintain optimal positioning. The precise timestep naming (7.5M) reflects the exact training duration, showcasing the agent's development through extended training.
 
+### Demo: LunarLander PPO Agent
+
+Watch our trained Proximal Policy Optimization (PPO) agent playing LunarLander after 20 million training steps:
+
+![LunarLander PPO Gameplay](assets/videos/lunarlander_ppo_20M_gameplay.gif)
+
+**Model Details:**
+- **Algorithm**: Proximal Policy Optimization (PPO) with MLP policy
+- **Environment**: LunarLander-v3 (Box2D physics environment)
+- **Training Steps**: 20,000,000
+- **Architecture**: Multi-Layer Perceptron (MLP) with continuous action space
+- **Performance**: Smooth lunar landing with fuel efficiency and safe touchdown
+
+**Technical Specifications:**
+- **Input**: 8-dimensional state vector (position, velocity, orientation, etc.)
+- **Actions**: 4 continuous actions (main engine, left/right thrusters, orientation)
+- **Network**: MLP with hidden layers (64, 64) and continuous action distribution
+- **Training**: PPO with clipped objective, value function baseline, and entropy regularization
+
+The agent demonstrates excellent control by learning to navigate the lunar surface, manage fuel consumption, and execute smooth landings. The continuous action space allows for precise control over the lander's thrusters and orientation, resulting in professional-quality lunar landings.
+
 ## Contributing
 
 1. Choose the appropriate subdirectory for your contribution
