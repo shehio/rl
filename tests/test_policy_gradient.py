@@ -6,266 +6,217 @@ import pytest
 import sys
 import os
 import numpy as np
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 
-# Add the atari directory to the path
-sys.path.insert(
-    0, os.path.join(os.path.dirname(__file__), "..", "atari", "algorithms", "pg", "src")
-)
+# Add atari/algorithms to the path so the `pg` package resolves
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "atari", "algorithms"))
 
 try:
-    from mlp_torch import MLP
-    from agent import PolicyGradientAgent
-    from memory import Memory
+    from pg.agent import Agent, DOWN, UP
+    from pg.memory import Memory
+    from pg.hyperparameters import HyperParameters
+    from pg.mlp_torch import MLP
 except ImportError as e:
     pytest.skip(
         f"Could not import Policy Gradient modules: {e}", allow_module_level=True
     )
 
 
-class TestMLP:
-    """Test the MLP model."""
+def make_hyperparams(batch_size=10, save_interval=100):
+    return HyperParameters(
+        learning_rate=1e-4,
+        decay_rate=0.99,
+        gamma=0.99,
+        batch_size=batch_size,
+        save_interval=save_interval,
+    )
 
-    def test_mlp_initialization(self):
-        """Test that the MLP can be initialized."""
-        mlp = MLP(
-            input_count=6400,
-            hidden_layers_count=200,
-            output_count=1,
-            network_file="test.pkl",
-            game_name="pong",
-        )
-        assert mlp is not None
-        assert hasattr(mlp, "forward")
-        assert hasattr(mlp, "forward_pass")
 
-    def test_mlp_forward_pass(self):
-        """Test the forward pass of the MLP."""
-        mlp = MLP(
-            input_count=6400,
-            hidden_layers_count=200,
-            output_count=1,
-            network_file="test.pkl",
-            game_name="pong",
-        )
-
-        # Mock input
-        input_data = np.random.randn(6400).astype(np.float32)
-
-        # Mock torch
-        with patch("mlp_torch.torch") as mock_torch:
-            mock_tensor = MagicMock()
-            mock_torch.from_numpy.return_value = mock_tensor
-            mock_tensor.to.return_value = mock_tensor
-
-            # Mock the forward method
-            mock_output = MagicMock()
-            mock_output.cpu.return_value.numpy.return_value = np.array([0.7])
-            mock_hidden = MagicMock()
-            mock_hidden.cpu.return_value.numpy.return_value = np.random.randn(200)
-
-            mlp.forward = MagicMock(return_value=mock_output)
-            mlp.relu = MagicMock(return_value=mock_hidden)
-
-            output, hidden = mlp.forward_pass(input_data)
-            assert output is not None
-            assert hidden is not None
-
-    def test_mlp_save_load_network(self):
-        """Test saving and loading the network."""
-        mlp = MLP(
-            input_count=6400,
-            hidden_layers_count=200,
-            output_count=1,
-            network_file="test.pkl",
-            game_name="pong",
-        )
-
-        # Mock torch.save and torch.load
-        with patch("mlp_torch.torch.save") as mock_save, patch(
-            "mlp_torch.torch.load"
-        ) as mock_load, patch("mlp_torch.os.path.exists", return_value=True):
-            # Test saving
-            mlp.save_network(100)
-            mock_save.assert_called()
-
-            # Test loading
-            mock_state_dict = MagicMock()
-            mock_load.return_value = mock_state_dict
-
-            mlp.load_network(100)
-            mock_load.assert_called()
+def make_mock_policy_network(probability=0.5, hidden_size=8):
+    network = MagicMock()
+    network.forward_pass.return_value = (probability, np.zeros(hidden_size))
+    return network
 
 
 class TestMemory:
     """Test the Memory class."""
 
     def test_memory_initialization(self):
-        """Test that the Memory can be initialized."""
         memory = Memory()
-        assert memory is not None
-        assert hasattr(memory, "states")
-        assert hasattr(memory, "actions")
-        assert hasattr(memory, "rewards")
+        assert memory.states == []
+        assert memory.hidden_layers == []
+        assert memory.dlogps == []
+        assert memory.rewards == []
 
-    def test_memory_add_episode(self):
-        """Test adding an episode to memory."""
+    def test_memory_str_reports_counts(self):
         memory = Memory()
-
-        # Mock episode data
-        states = [np.random.randn(6400) for _ in range(10)]
-        actions = [0, 1, 0, 1, 0, 1, 0, 1, 0, 1]
-        rewards = [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0]
-
-        memory.add_episode(states, actions, rewards)
-
-        assert len(memory.states) == 10
-        assert len(memory.actions) == 10
-        assert len(memory.rewards) == 10
-
-    def test_memory_clear(self):
-        """Test clearing the memory."""
-        memory = Memory()
-
-        # Add some data
-        states = [np.random.randn(6400) for _ in range(5)]
-        actions = [0, 1, 0, 1, 0]
-        rewards = [0.0, 1.0, 0.0, 1.0, 0.0]
-
-        memory.add_episode(states, actions, rewards)
-        assert len(memory.states) == 5
-
-        # Clear memory
-        memory.clear()
-        assert len(memory.states) == 0
-        assert len(memory.actions) == 0
-        assert len(memory.rewards) == 0
+        memory.states.append(np.zeros(4))
+        memory.rewards.append(1.0)
+        text = str(memory)
+        assert "states=1" in text
+        assert "rewards=1" in text
 
 
-class TestPolicyGradientAgent:
-    """Test the PolicyGradientAgent class."""
+class TestMLP:
+    """Test the PyTorch MLP policy network."""
 
-    def test_agent_initialization(self):
-        """Test that the agent can be initialized."""
-        # Mock the environment
-        mock_env = MagicMock()
-        mock_env.action_space.n = 2  # Binary action space
-
-        # Mock the MLP
-        with patch("agent.MLP") as mock_mlp_class:
-            mock_mlp = MagicMock()
-            mock_mlp_class.return_value = mock_mlp
-
-            agent = PolicyGradientAgent(mock_env)
-            assert agent is not None
-            assert hasattr(agent, "act")
-            assert hasattr(agent, "train")
-
-    def test_agent_act_method(self):
-        """Test the act method of the agent."""
-        # Mock the environment
-        mock_env = MagicMock()
-        mock_env.action_space.n = 2
-
-        # Mock the MLP
-        with patch("agent.MLP") as mock_mlp_class:
-            mock_mlp = MagicMock()
-            mock_mlp_class.return_value = mock_mlp
-
-            agent = PolicyGradientAgent(mock_env)
-
-            # Mock the state
-            state = np.random.randn(6400).astype(np.float32)
-
-            # Mock the MLP's forward pass
-            mock_mlp.forward_pass.return_value = (np.array([0.7]), np.random.randn(200))
-
-            action = agent.act(state)
-            assert isinstance(action, int)
-            assert action in [0, 1]
-
-    def test_agent_train_method(self):
-        """Test the train method of the agent."""
-        # Mock the environment
-        mock_env = MagicMock()
-        mock_env.action_space.n = 2
-
-        # Mock the MLP
-        with patch("agent.MLP") as mock_mlp_class:
-            mock_mlp = MagicMock()
-            mock_mlp_class.return_value = mock_mlp
-
-            agent = PolicyGradientAgent(mock_env)
-
-            # Mock the training process
-            with patch.object(agent, "memory") as mock_memory:
-                mock_memory.states = [np.random.randn(6400) for _ in range(10)]
-                mock_memory.actions = [0, 1, 0, 1, 0, 1, 0, 1, 0, 1]
-                mock_memory.rewards = [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0]
-
-                # Mock the MLP's training
-                mock_mlp.train = MagicMock()
-
-                agent.train()
-                mock_mlp.train.assert_called()
-
-
-class TestPolicyGradientIntegration:
-    """Integration tests for Policy Gradient functionality."""
-
-    def test_pg_script_imports(self):
-        """Test that Policy Gradient scripts can be imported."""
-        scripts_path = os.path.join(
-            os.path.dirname(__file__), "..", "atari", "algorithms", "pg", "scripts"
+    def test_mlp_initialization(self):
+        mlp = MLP(
+            input_count=16,
+            hidden_layers_count=8,
+            output_count=1,
+            network_file="torch_mlp_test",
+            game_name="testgame",
         )
+        assert mlp is not None
+        assert hasattr(mlp, "forward")
+        assert hasattr(mlp, "forward_pass")
 
-        try:
-            sys.path.insert(0, scripts_path)
-            # Test that the main functions can be imported
-            from pgpong import main
-            from pgbreakout import main as breakout_main
-            from pgpacman import main as pacman_main
-
-            assert main is not None
-            assert breakout_main is not None
-            assert pacman_main is not None
-
-        except ImportError as e:
-            pytest.skip(f"Could not import Policy Gradient script modules: {e}")
-
-    def test_pg_pacman_imports(self):
-        """Test that Pacman-specific modules can be imported."""
-        pacman_path = os.path.join(
-            os.path.dirname(__file__),
-            "..",
-            "atari",
-            "algorithms",
-            "pg",
-            "src",
-            "pacman",
+    def test_mlp_forward_pass(self):
+        """forward_pass returns a probability and the hidden activations."""
+        mlp = MLP(
+            input_count=16,
+            hidden_layers_count=8,
+            output_count=1,
+            network_file="torch_mlp_test",
+            game_name="testgame",
         )
+        state = np.random.randn(16).astype(np.float32)
+        probability, hidden = mlp.forward_pass(state)
+        assert 0.0 < probability < 1.0  # Sigmoid output
+        assert hidden.shape == (8,)
 
-        try:
-            sys.path.insert(0, pacman_path)
-            from multi_action_agent import MultiActionAgent
-            from cnn_torch_multiaction import CNNMultiAction
-            from mlp_torch_multiaction import MLPMultiAction
+    def test_mlp_train_consumes_gradient_buffer(self):
+        """train() runs an optimization step and clears the gradient buffer."""
+        mlp = MLP(
+            input_count=16,
+            hidden_layers_count=8,
+            output_count=1,
+            network_file="torch_mlp_test",
+            game_name="testgame",
+        )
+        epx = np.random.randn(3, 16).astype(np.float32)
+        eph = np.random.randn(3, 8).astype(np.float32)
+        epdlogp = np.random.randn(3, 1).astype(np.float32)
+        mlp.backward_pass(eph, epdlogp, epx)
+        assert len(mlp.gradient_buffer) == 1
+        mlp.train(learning_rate=1e-4, decay_rate=0.99)
+        assert mlp.gradient_buffer == []
 
-            assert MultiActionAgent is not None
-            assert CNNMultiAction is not None
-            assert MLPMultiAction is not None
+    def test_mlp_save_and_load_network(self, tmp_path, monkeypatch):
+        """save_network/load_network round-trip through the models directory."""
+        workdir = tmp_path / "atari" / "algorithms" / "pg"
+        workdir.mkdir(parents=True)
+        monkeypatch.chdir(workdir)
 
-        except ImportError as e:
-            pytest.skip(f"Could not import Pacman-specific modules: {e}")
+        mlp = MLP(
+            input_count=16,
+            hidden_layers_count=8,
+            output_count=1,
+            network_file="torch_mlp_test",
+            game_name="testgame",
+        )
+        mlp.save_network(100)
 
-    def test_hyperparameters_import(self):
-        """Test that hyperparameters can be imported."""
-        try:
-            from hyperparameters import HyperParameters
+        saved = (
+            tmp_path
+            / "atari"
+            / "models"
+            / "pg"
+            / "testgame"
+            / "torch_mlp_test_testgame_i16_h8_o1_100"
+        )
+        assert saved.exists()
 
-            # Test that hyperparameters can be instantiated
-            hyperparams = HyperParameters()
-            assert hyperparams is not None
+        # Loading restores the same weights
+        other = MLP(
+            input_count=16,
+            hidden_layers_count=8,
+            output_count=1,
+            network_file="torch_mlp_test",
+            game_name="testgame",
+        )
+        other.load_network(100)
+        state = np.random.randn(16).astype(np.float32)
+        probability_a, _ = mlp.forward_pass(state)
+        probability_b, _ = other.forward_pass(state)
+        assert probability_a == pytest.approx(probability_b, abs=1e-6)
 
-        except ImportError as e:
-            pytest.skip(f"Could not import hyperparameters: {e}")
+
+class TestAgent:
+    """Test the REINFORCE Agent."""
+
+    def test_sample_action_returns_valid_action(self):
+        agent = Agent(make_mock_policy_network(), make_hyperparams())
+        state = np.random.randn(16)
+        action = agent.sample_action(state)
+        assert action in (DOWN, UP)
+
+    def test_sample_and_record_action_records_memory(self):
+        agent = Agent(make_mock_policy_network(), make_hyperparams())
+        state = np.random.randn(16)
+        action = agent.sample_and_record_action(state)
+        assert action in (DOWN, UP)
+        assert len(agent.memory.states) == 1
+        assert len(agent.memory.hidden_layers) == 1
+        assert len(agent.memory.dlogps) == 1
+
+    def test_reap_reward(self):
+        agent = Agent(make_mock_policy_network(), make_hyperparams())
+        agent.reap_reward(1.0)
+        agent.reap_reward(-1.0)
+        assert agent.memory.rewards == [1.0, -1.0]
+
+    def test_discount_and_normalize_rewards(self):
+        """Rewards are discounted backwards and standardized to unit normal."""
+        agent = Agent(make_mock_policy_network(), make_hyperparams())
+        rewards = np.array([[0.0], [0.0], [1.0]])
+        discounted = agent._Agent__discount_and_normalize_rewards(rewards, gamma=0.5)
+        # Discounting: [0.25, 0.5, 1.0] before normalization, so ordering holds
+        assert discounted[0] < discounted[1] < discounted[2]
+        assert np.mean(discounted) == pytest.approx(0.0, abs=1e-8)
+        assert np.std(discounted) == pytest.approx(1.0, abs=1e-6)
+
+    def test_episode_end_updates_train_and_reset(self):
+        """Episode end backpropagates, trains on batch boundary, resets memory."""
+        network = make_mock_policy_network()
+        agent = Agent(network, make_hyperparams(batch_size=10, save_interval=10))
+
+        state = np.random.randn(16)
+        for reward in (0.0, 0.0, 1.0):
+            agent.sample_and_record_action(state)
+            agent.reap_reward(reward)
+
+        agent.make_episode_end_updates(episode_number=10)
+
+        network.backward_pass.assert_called_once()
+        network.train.assert_called_once()
+        network.save_network.assert_called_once_with(10)
+        assert agent.memory.states == []  # Fresh memory for next episode
+
+    def test_episode_end_skips_training_without_rewards(self):
+        """Without any reward signal there is nothing to learn from."""
+        network = make_mock_policy_network()
+        agent = Agent(network, make_hyperparams())
+
+        state = np.random.randn(16)
+        agent.sample_and_record_action(state)
+        agent.reap_reward(0.0)
+
+        agent.make_episode_end_updates(episode_number=1)
+        network.backward_pass.assert_not_called()
+
+
+class TestPacmanImports:
+    """The Pacman-specific policy gradient modules should be importable."""
+
+    def test_pacman_modules_import(self):
+        from pg.pacman.multi_action_agent import MultiActionAgent
+        from pg.pacman.cnn_torch_multiaction import CNNMultiAction
+        from pg.pacman.mlp_torch_multiaction import MLPMultiAction
+        from pg.pacman.memory_multiaction import MemoryMultiAction
+
+        assert MultiActionAgent is not None
+        assert CNNMultiAction is not None
+        assert MLPMultiAction is not None
+        assert MemoryMultiAction is not None
