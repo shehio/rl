@@ -10,11 +10,9 @@ import numpy as np
 import argparse
 from typing import Dict, Any
 
-# Add project root to path
-project_root = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..")
-)
-sys.path.insert(0, os.path.join(project_root, "atari", "src"))
+# Add atari/algorithms to path so the `pg` package resolves
+algorithms_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, algorithms_root)
 
 from pg.hyperparameters import HyperParameters
 from pg.game import Game

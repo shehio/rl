@@ -10,7 +10,8 @@ import numpy as np
 import argparse
 from typing import Dict, Any
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../..", "atari", "src"))
+# Add atari/algorithms to path so the `pg` package resolves
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 from pg.hyperparameters import HyperParameters
 from pg.game import Game
