@@ -92,7 +92,6 @@ python stockfish_vs_leela.py
 
 ### Graph Search
 ```bash
-# For detailed instructions, see graph-search/README.md
 cd graph-search
 python river-crossing-puzzle.py
 ```
@@ -112,7 +111,7 @@ python river-crossing-puzzle.py
 - **[chess/README.md](chess/README.md)** - Chess engine integration guide
 
 ### Infrastructure
-- **[terraform/README.md](terraform/README.md)** - Cloud deployment setup
+- **[terraform/](terraform/)** - Terraform configuration for AWS deployment
 
 ## 🎮 Supported Games & Algorithms
 

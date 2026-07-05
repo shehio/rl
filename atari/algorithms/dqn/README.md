@@ -35,10 +35,10 @@ python scripts/pong-dqn.py
 python scripts/pacman-dqn.py
 
 # Use generic trainer
-python scripts/dqn_trainer.py --game pong --episodes 1000
+python scripts/dqn_trainer.py pong
 
-# Test trained model
-python scripts/dqn_tester.py --model ../../models/dqn/pong/pong-cnn-900
+# Test trained model (loads the latest checkpoint by default)
+python scripts/dqn_tester.py pong --load-episode 900
 ```
 
 ## 🧠 DQN Features

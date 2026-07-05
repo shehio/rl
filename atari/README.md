@@ -42,27 +42,27 @@ python atari_baseline_test.py --model pong_ppo_cnn_1000000
 
 ### Using Custom DQN Implementation
 ```bash
-cd algorithms/dqn/scripts
+cd algorithms/dqn
 
 # Train DQN on Pong
-python pong-dqn.py
+python scripts/pong-dqn.py
 
 # Train DQN on Pacman
-python pacman-dqn.py
+python scripts/pacman-dqn.py
 ```
 
 ### Using Custom Policy Gradient Implementation
 ```bash
-cd algorithms/pg/scripts
+cd algorithms/pg
 
 # Train PG on Pong
-python pgpong.py
+python scripts/pg_trainer.py pong
 
 # Train PG on Breakout
-python pgbreakout.py
+python scripts/pg_trainer.py breakout
 
 # Train PG on Pacman
-python pgpacman.py
+python scripts/pg_trainer.py pacman
 ```
 
 ## Detailed Documentation
