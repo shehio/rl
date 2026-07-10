@@ -53,6 +53,8 @@ class DuelCNNImproved(nn.Module):
         Vx = self.Vlinear2(Vx)  # No activation on last layer
 
         # Combine value and advantage
-        q = Vx + (Ax - Ax.mean())
+        # Mean over actions per sample (dueling aggregation, Wang et al. 2016).
+        # A global Ax.mean() would couple samples across the batch.
+        q = Vx + (Ax - Ax.mean(dim=1, keepdim=True))
 
         return q

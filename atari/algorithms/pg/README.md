@@ -9,11 +9,9 @@ This directory contains a custom implementation of Policy Gradient (REINFORCE) a
 ```
 pg/
 ├── scripts/               # Training scripts
-│   ├── pgpong.py         # Train PG on Pong
-│   ├── pgbreakout.py     # Train PG on Breakout
-│   ├── pgpacman.py       # Train PG on Ms. Pacman
-│   ├── pg_trainer.py     # Generic PG trainer
-│   └── pg_tester.py      # Test trained PG models
+│   ├── pg_trainer.py     # Generic PG trainer (Pong, Breakout, Ms. Pacman)
+│   ├── pg_tester.py      # Test trained PG models
+│   └── game_configs.py   # Game-specific configuration
 └── src/                   # Source code
     ├── agent.py          # PG agent implementation
     ├── game.py           # Game environment wrapper
@@ -32,19 +30,19 @@ pg/
 
 ```bash
 # Train on Pong (binary actions)
-python scripts/pgpong.py
+python scripts/pg_trainer.py pong
 
 # Train on Breakout (binary actions)
-python scripts/pgbreakout.py
+python scripts/pg_trainer.py breakout
 
 # Train on Ms. Pacman (9 actions)
-python scripts/pgpacman.py
+python scripts/pg_trainer.py pacman
 
-# Use generic trainer
+# Train with rendering enabled
 python scripts/pg_trainer.py pong --render
 
-# Test trained model
-python scripts/pg_tester.py --model ../../models/pg/pong/torch_mlp_pong_i6400_h200_o1_90000
+# Test trained model (loads the latest checkpoint by default)
+python scripts/pg_tester.py pong --load-episode 90000
 ```
 
 ## 🧠 Policy Gradient Features

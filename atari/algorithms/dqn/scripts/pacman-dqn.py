@@ -8,9 +8,9 @@ import time
 import json
 from collections import deque
 
-# Get the project root directory (2 levels up from this script)
+# Add atari/algorithms (2 levels up from this script) to path so the `dqn` package resolves
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-sys.path.insert(0, os.path.join(project_root, "src"))
+sys.path.insert(0, project_root)
 from dqn.config.environment_config import EnvironmentConfig  # type: ignore
 from dqn.config.exploration_config import ExplorationConfig  # type: ignore
 from dqn.config.image_config import ImageConfig  # type: ignore
