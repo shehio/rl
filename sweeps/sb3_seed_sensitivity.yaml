@@ -1,0 +1,25 @@
+# Seed sensitivity: same PPO setup across 5 seeds to gauge run-to-run variance.
+# Launch: cd atari/baselines && wandb sweep ../../sweeps/sb3_seed_sensitivity.yaml && wandb agent <sweep-id>
+entity: shehio
+project: rl-atari
+program: atari_baseline_train.py
+method: grid
+metric:
+  name: rollout/ep_rew_mean
+  goal: maximize
+parameters:
+  algorithm:
+    value: ppo
+  timesteps:
+    value: "500000"
+  env:
+    value: ALE/Pong-v5
+  n_envs:
+    value: 1
+  seed:
+    values: [0, 1, 2, 3, 4]
+command:
+  - ${env}
+  - python
+  - ${program}
+  - ${args}

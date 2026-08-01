@@ -192,3 +192,7 @@ arcade/models/
 arcade/baselines/logs/
 arcade/baselines/models/
 arcade/baselines/__pycache__/
+
+# Experiment tracking
+wandb/
+tb_logs/

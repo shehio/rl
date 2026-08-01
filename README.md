@@ -96,6 +96,59 @@ cd graph-search
 python river-crossing-puzzle.py
 ```
 
+## Experiment Tracking and Cloud Runs
+
+Training runs log to [Weights & Biases](https://wandb.ai) (entity `shehio`, project `rl-atari`). Four trainers are instrumented:
+
+- **Custom DQN** (`atari/algorithms/dqn/scripts/dqn_trainer.py`): per-episode reward, loss, epsilon, last-100 average reward, average max Q, steps, and duration; final results as summary metrics.
+- **Custom Policy Gradient** (`atari/algorithms/pg/scripts/pg_trainer.py`): per-episode reward, running reward, and points scored/conceded.
+- **SB3 Atari** (`atari/baselines/atari_baseline_train.py`) and **SB3 Lunar Lander** (`atari/baselines/train_lunarlander.py`): full SB3 metrics via `WandbCallback` with `sync_tensorboard`, so `rollout/ep_rew_mean` and friends stream to wandb.
+
+### Running With and Without Wandb
+
+```bash
+wandb login                       # once; or export WANDB_API_KEY
+cd atari/baselines
+python atari_baseline_train.py --algorithm ppo --timesteps 100000   # tracked
+python atari_baseline_train.py --algorithm ppo --no-wandb           # untracked
+python train_lunarlander.py --algorithm dqn --timesteps 25000 --from-scratch
+```
+
+The custom trainers take the same flag, plus the sweepable knobs used by `dqn_exploration.yaml`:
+
+```bash
+python atari/algorithms/dqn/scripts/dqn_trainer.py pong --no-load-network \
+  --epsilon-decay 0.999 --memory-size 50000
+python atari/algorithms/pg/scripts/pg_trainer.py pong --no-load-network --no-wandb
+```
+
+Every trainer accepts `--no-wandb`, and `WANDB_MODE=disabled`/`offline` works too. If wandb is not installed, the scripts print a notice and train normally.
+
+### Launching Sweeps
+
+Sweep configs live in `sweeps/` (usage comment at the top of each file):
+
+- `sb3_algo_comparison.yaml`: PPO vs DQN vs A2C, equal timesteps
+- `sb3_n_envs.yaml`: n_envs 1/4/8 for PPO
+- `sb3_seed_sensitivity.yaml`: same PPO setup across 5 seeds
+- `dqn_exploration.yaml`: custom DQN epsilon decay vs replay buffer size
+
+```bash
+cd atari/baselines
+wandb sweep ../../sweeps/sb3_algo_comparison.yaml
+wandb agent <sweep-id>
+```
+
+### Running on Modal (GPU)
+
+`modal_app.py` runs the SB3 Atari trainer on an A10G with the same CLI as the local script. One-time setup: `pip install modal`, `modal setup`, and create a `wandb` secret in the Modal dashboard containing `WANDB_API_KEY`. Checkpoints persist in the `rl-atari-models` Modal volume.
+
+```bash
+modal run modal_app.py --algorithm ppo --timesteps 1000000 --env ALE/Pong-v5 --n-envs 8
+```
+
+For raw EC2 provisioning, see `terraform/README.md` and `atari/run_in_cloud.sh`.
+
 ## Detailed Documentation
 
 ### Theory & Algorithms

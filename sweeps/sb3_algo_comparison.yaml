@@ -1,0 +1,25 @@
+# PPO vs DQN vs A2C on the same env with an equal timestep budget.
+# Launch: cd atari/baselines && wandb sweep ../../sweeps/sb3_algo_comparison.yaml && wandb agent <sweep-id>
+entity: shehio
+project: rl-atari
+program: atari_baseline_train.py
+method: grid
+metric:
+  name: rollout/ep_rew_mean
+  goal: maximize
+parameters:
+  algorithm:
+    values: [ppo, dqn, a2c]
+  timesteps:
+    value: "500000"
+  env:
+    value: ALE/Pong-v5
+  n_envs:
+    value: 1
+  seed:
+    value: 0
+command:
+  - ${env}
+  - python
+  - ${program}
+  - ${args}

@@ -1,0 +1,21 @@
+# Custom DQN: epsilon-decay schedule vs replay buffer size on Pong.
+# Launch: cd atari/algorithms/dqn/scripts && wandb sweep ../../../../sweeps/dqn_exploration.yaml && wandb agent <sweep-id>
+entity: shehio
+project: rl-atari
+program: dqn_trainer.py
+method: grid
+metric:
+  name: last_100_avg_reward
+  goal: maximize
+parameters:
+  epsilon-decay:
+    values: [0.99, 0.999, 0.9995]
+  memory-size:
+    values: [10000, 50000, 100000]
+command:
+  - ${env}
+  - python
+  - ${program}
+  - pong
+  - --no-load-network
+  - ${args}
