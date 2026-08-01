@@ -8,6 +8,12 @@ import re
 import argparse
 import sys
 
+try:
+    import wandb
+    from wandb.integration.sb3 import WandbCallback
+except ImportError:
+    wandb = None
+
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
@@ -45,8 +51,43 @@ def parse_arguments():
     parser.add_argument(
         "--seed", "-s", type=int, default=0, help="Random seed (default: 0)"
     )
+    parser.add_argument(
+        "--no-wandb",
+        action="store_true",
+        help="Disable Weights & Biases experiment tracking",
+    )
+    parser.add_argument(
+        "--wandb-tags",
+        type=str,
+        default=None,
+        help="Comma-separated wandb tags (e.g. smoke-ab,baseline)",
+    )
 
     return parser.parse_args()
+
+
+def init_wandb(args, policy):
+    """Start a wandb run, or return None when disabled/unavailable."""
+    if args.no_wandb or wandb is None:
+        if wandb is None and not args.no_wandb:
+            print("wandb not installed; continuing without experiment tracking")
+        return None
+
+    tags = args.wandb_tags.split(",") if args.wandb_tags else [args.algorithm, "sb3"]
+    return wandb.init(
+        entity="shehio",
+        project="rl-atari",
+        config={
+            "algorithm": args.algorithm,
+            "env": args.env,
+            "n_envs": args.n_envs,
+            "seed": args.seed,
+            "timesteps": args.timesteps,
+            "policy": policy,
+        },
+        tags=tags,
+        sync_tensorboard=True,  # Stream SB3's tensorboard metrics to wandb
+    )
 
 
 def get_env_name(env_string):
@@ -110,6 +151,10 @@ def main():
     algorithm, base_model_path, policy = algorithm_map[args.algorithm]
     print(f"Selected: {algorithm.__name__} with {policy} on {args.env}")
 
+    run = init_wandb(args, policy)
+    tensorboard_log = "./tb_logs" if run else None
+    callback = WandbCallback(verbose=2) if run else None
+
     # Set up model directory
     model_dir = f"../models/baselines"
     ensure_model_dir(model_dir)
@@ -122,10 +167,12 @@ def main():
     if latest_model:
         print(f"Found latest model: {latest_model} ({current_timesteps:,} timesteps)")
         print("Loading latest model...")
-        model = algorithm.load(latest_model, env=env, verbose=1)
+        model = algorithm.load(
+            latest_model, env=env, verbose=1, tensorboard_log=tensorboard_log
+        )
     else:
         print("No existing models found. Starting fresh...")
-        model = algorithm(policy, env, verbose=1)
+        model = algorithm(policy, env, verbose=1, tensorboard_log=tensorboard_log)
         current_timesteps = 0
 
     # Handle training duration
@@ -136,7 +183,11 @@ def main():
         try:
             while True:
                 # Train in chunks of 100000 timesteps
-                model.learn(total_timesteps=100000, reset_num_timesteps=False)
+                model.learn(
+                    total_timesteps=100000,
+                    reset_num_timesteps=False,
+                    callback=callback,
+                )
                 current_timesteps += 100000
 
                 # Save checkpoint every 100000 timesteps
@@ -160,7 +211,11 @@ def main():
         try:
             training_timesteps = int(training_input)
             print(f"Starting training for {training_timesteps:,} timesteps...")
-            model.learn(total_timesteps=training_timesteps, reset_num_timesteps=False)
+            model.learn(
+                total_timesteps=training_timesteps,
+                reset_num_timesteps=False,
+                callback=callback,
+            )
 
             # Save the final model
             final_timesteps = current_timesteps + training_timesteps
@@ -172,11 +227,19 @@ def main():
             print(
                 f"Invalid timesteps value: {training_input}. Defaulting to 100,000 timesteps..."
             )
-            model.learn(total_timesteps=100000, reset_num_timesteps=False)
+            model.learn(
+                total_timesteps=100000,
+                reset_num_timesteps=False,
+                callback=callback,
+            )
             final_timesteps = current_timesteps + 100000
             save_path = os.path.join(model_dir, f"{base_model_path}_{final_timesteps}")
             model.save(save_path)
             print(f"Training completed! Model saved as: {save_path}")
+
+    if run:
+        run.summary["total_timesteps_trained"] = model.num_timesteps
+        run.finish()
 
 
 if __name__ == "__main__":

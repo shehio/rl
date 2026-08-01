@@ -28,6 +28,11 @@ from game_configs import (
 
 import re
 
+try:
+    import wandb
+except ImportError:
+    wandb = None
+
 
 def find_latest_model_episode(
     game_name: str, model_dir: str = "atari/scripts/policy-gradient/models"
@@ -68,6 +73,31 @@ class PolicyGradientTrainer:
 
         # Initialize game-specific variables
         self.previous_frame = None
+        self.wandb_run = None
+
+    def init_wandb(self, hyperparams: HyperParameters) -> None:
+        """Start a wandb run, or leave tracking off when disabled/unavailable."""
+        if self.config.get("no_wandb") or wandb is None:
+            if wandb is None and not self.config.get("no_wandb"):
+                print("wandb not installed; continuing without experiment tracking")
+            return
+
+        self.wandb_run = wandb.init(
+            entity="shehio",
+            project="rl-atari",
+            config={
+                "algorithm": "pg-custom",
+                "env": self.game_config.game_id,
+                "game": self.game_name,
+                "learning_rate": hyperparams.learning_rate,
+                "decay_rate": hyperparams.decay_rate,
+                "gamma": hyperparams.gamma,
+                "batch_size": hyperparams.batch_size,
+                "save_interval": hyperparams.save_interval,
+                "hidden_layers_count": self.config.get("hidden_layers_count", 200),
+            },
+            tags=["pg-custom", self.game_name],
+        )
 
     def setup_network(self, game: Game) -> Any:
         """Setup the appropriate network based on game type."""
@@ -150,6 +180,7 @@ class PolicyGradientTrainer:
             )
 
             agent = self.setup_agent(policy_network, hyperparams)
+            self.init_wandb(hyperparams)
 
             # Call game-specific initialization if needed
             if self.game_config.init_func:
@@ -173,14 +204,36 @@ class PolicyGradientTrainer:
                 self.post_step(game, info)
 
                 if done:
+                    # Capture per-episode stats before end_episode() resets them
+                    episode = game.episode_number
+                    episode_reward = game.reward_sum
+                    points_scored = game.points_scored
+                    points_conceded = game.points_conceeded
+
                     agent.make_episode_end_updates(game.episode_number)
                     game.end_episode()
                     self.post_episode(game, agent)
+
+                    if self.wandb_run:
+                        self.wandb_run.log(
+                            {
+                                "episode": episode,
+                                "episode_reward": episode_reward,
+                                "running_reward": game.running_reward,
+                                "points_scored": points_scored,
+                                "points_conceded": points_conceded,
+                            }
+                        )
 
         except KeyboardInterrupt:
             print("\nTraining interrupted by user")
             print(f"Final episode: {game.episode_number}")
             print(f"Final running reward: {game.running_reward:.3f}")
+
+            if self.wandb_run:
+                self.wandb_run.summary["final_episode"] = game.episode_number
+                self.wandb_run.summary["final_running_reward"] = game.running_reward
+                self.wandb_run.finish()
 
             # Game-specific final stats
             if self.game_name == "pacman":
@@ -215,6 +268,11 @@ def main():
         "--save-interval", type=int, default=10000, help="Save interval"
     )
     parser.add_argument("--network-file", type=str, help="Network file path")
+    parser.add_argument(
+        "--no-wandb",
+        action="store_true",
+        help="Disable Weights & Biases experiment tracking",
+    )
 
     args = parser.parse_args()
 
@@ -230,6 +288,7 @@ def main():
         "learning_rate": args.learning_rate,
         "batch_size": args.batch_size,
         "save_interval": args.save_interval,
+        "no_wandb": args.no_wandb,
     }
 
     if args.network_file:

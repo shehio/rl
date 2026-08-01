@@ -22,6 +22,11 @@ sys.path.insert(0, algorithms_root)
 
 from dqn_game_configs import get_dqn_hyperparameters, get_dqn_game_config
 
+try:
+    import wandb
+except ImportError:
+    wandb = None
+
 
 class DQNTrainer:
     """Unified trainer for DQN algorithms."""
@@ -30,6 +35,36 @@ class DQNTrainer:
         self.game_name = game_name
         self.config = config
         self.game_config = get_dqn_game_config(game_name)
+        self.wandb_run = None
+
+    def init_wandb(self, hyperparams):
+        """Start a wandb run, or leave tracking off when disabled/unavailable."""
+        if self.config.get("no_wandb") or wandb is None:
+            if wandb is None and not self.config.get("no_wandb"):
+                print("wandb not installed; continuing without experiment tracking")
+            return
+
+        self.wandb_run = wandb.init(
+            entity="shehio",
+            project="rl-atari",
+            config={
+                "algorithm": "dqn-custom",
+                "env": hyperparams.environment.environment,
+                "game": self.game_name,
+                "learning_rate": hyperparams.learning.alpha,
+                "gamma": hyperparams.learning.gamma,
+                "batch_size": hyperparams.training.batch_size,
+                "max_episode": hyperparams.training.max_episode,
+                "max_step": hyperparams.training.max_step,
+                "max_memory_len": hyperparams.training.max_memory_len,
+                "min_memory_len": hyperparams.training.min_memory_len,
+                "epsilon_start": hyperparams.exploration.epsilon_start,
+                "epsilon_decay": hyperparams.exploration.epsilon_decay,
+                "epsilon_minimum": hyperparams.exploration.epsilon_minimum,
+                "device": str(hyperparams.environment.device),
+            },
+            tags=["dqn-custom", self.game_name],
+        )
 
     def train(self):
         """Main training loop."""
@@ -38,6 +73,7 @@ class DQNTrainer:
 
             # Get hyperparameters with config overrides
             hyperparams = get_dqn_hyperparameters(self.game_name, self.config)
+            self.init_wandb(hyperparams)
 
             # Print hyperparameters
             print(f"Learning rate (alpha): {hyperparams.learning.alpha}")
@@ -201,6 +237,21 @@ class DQNTrainer:
 
                 print(out_str)
 
+                if self.wandb_run:
+                    self.wandb_run.log(
+                        {
+                            "episode": episode,
+                            "episode_reward": total_reward,
+                            "episode_loss": total_loss,
+                            "last_100_avg_reward": float(np.mean(last_100_ep_reward)),
+                            "avg_max_q": avg_max_q_val,
+                            "epsilon": agent.epsilon,
+                            "episode_steps": step,
+                            "total_steps": total_step,
+                            "episode_duration_sec": time_passed,
+                        }
+                    )
+
                 if hyperparams.model.save_models:
                     output_path = (
                         f"{hyperparams.model.model_path}out.txt"  # Save outStr to file
@@ -209,6 +260,7 @@ class DQNTrainer:
                         outfile.write(out_str + "\n")
 
             env.close()
+            self.finish_wandb(episode, last_100_ep_reward)
 
         except KeyboardInterrupt:
             print("\nTraining interrupted by user")
@@ -216,10 +268,22 @@ class DQNTrainer:
             if last_100_ep_reward:
                 print(f"Final running reward: {np.mean(last_100_ep_reward):.3f}")
             env.close()
+            self.finish_wandb(episode, last_100_ep_reward)
 
         except Exception as e:
             print(f"Error during training: {e}")
             raise
+
+    def finish_wandb(self, episode, last_100_ep_reward):
+        """Record final results as summary metrics and close the run."""
+        if not self.wandb_run:
+            return
+        self.wandb_run.summary["final_episode"] = episode
+        if last_100_ep_reward:
+            self.wandb_run.summary["final_last_100_avg_reward"] = float(
+                np.mean(last_100_ep_reward)
+            )
+        self.wandb_run.finish()
 
 
 def main():
@@ -237,6 +301,17 @@ def main():
     parser.add_argument("--learning-rate", type=float, help="Learning rate")
     parser.add_argument("--batch-size", type=int, help="Batch size")
     parser.add_argument("--save-interval", type=int, help="Save interval")
+    parser.add_argument(
+        "--epsilon-decay", type=float, help="Epsilon decay rate (e.g. 0.99)"
+    )
+    parser.add_argument(
+        "--memory-size", type=int, help="Replay buffer capacity (max_memory_len)"
+    )
+    parser.add_argument(
+        "--no-wandb",
+        action="store_true",
+        help="Disable Weights & Biases experiment tracking",
+    )
 
     args = parser.parse_args()
 
@@ -247,6 +322,9 @@ def main():
         "learning_rate": args.learning_rate,
         "batch_size": args.batch_size,
         "save_interval": args.save_interval,
+        "epsilon_decay": args.epsilon_decay,
+        "memory_size": args.memory_size,
+        "no_wandb": args.no_wandb,
     }
 
     trainer = DQNTrainer(args.game, config)

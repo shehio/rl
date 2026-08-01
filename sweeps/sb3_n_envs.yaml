@@ -1,0 +1,25 @@
+# Throughput and sample-efficiency effect of parallel envs (n_envs 1/4/8) for PPO.
+# Launch: cd atari/baselines && wandb sweep ../../sweeps/sb3_n_envs.yaml && wandb agent <sweep-id>
+entity: shehio
+project: rl-atari
+program: atari_baseline_train.py
+method: grid
+metric:
+  name: rollout/ep_rew_mean
+  goal: maximize
+parameters:
+  algorithm:
+    value: ppo
+  timesteps:
+    value: "500000"
+  env:
+    value: ALE/Pong-v5
+  n_envs:
+    values: [1, 4, 8]
+  seed:
+    value: 0
+command:
+  - ${env}
+  - python
+  - ${program}
+  - ${args}

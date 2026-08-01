@@ -201,12 +201,20 @@ def get_dqn_hyperparameters(game_name: str, config: Dict[str, Any]) -> HyperPara
     if batch_size is None:
         batch_size = game_config.training_config.batch_size
 
+    max_memory_len = config.get("memory_size")
+    min_memory_len = game_config.training_config.min_memory_len
+    if max_memory_len is None:
+        max_memory_len = game_config.training_config.max_memory_len
+    else:
+        # Keep the training threshold below the buffer capacity
+        min_memory_len = min(min_memory_len, max_memory_len // 2)
+
     training_config = TrainingConfig(
         batch_size=batch_size,
         max_episode=game_config.training_config.max_episode,
         max_step=game_config.training_config.max_step,
-        max_memory_len=game_config.training_config.max_memory_len,
-        min_memory_len=game_config.training_config.min_memory_len,
+        max_memory_len=max_memory_len,
+        min_memory_len=min_memory_len,
     )
 
     # Learning config
@@ -219,9 +227,13 @@ def get_dqn_hyperparameters(game_name: str, config: Dict[str, Any]) -> HyperPara
     )
 
     # Exploration config
+    epsilon_decay = config.get("epsilon_decay")
+    if epsilon_decay is None:
+        epsilon_decay = game_config.exploration_config.epsilon_decay
+
     exploration_config = ExplorationConfig(
         epsilon_start=game_config.exploration_config.epsilon_start,
-        epsilon_decay=game_config.exploration_config.epsilon_decay,
+        epsilon_decay=epsilon_decay,
         epsilon_minimum=game_config.exploration_config.epsilon_minimum,
     )
 
