@@ -169,8 +169,11 @@ class MultiActionAgent:
         discounted_rewards = np.zeros_like(rewards)
         running_add = 0
         for t in reversed(range(0, rewards.size)):
-            if rewards[t] != 0:
-                running_add = 0
+            # NOTE: pg/agent.py resets running_add on any non-zero reward. That
+            # is correct for Pong, where scoring ends the rally and is therefore
+            # a real episode boundary ("pong specific!" in its comment). In
+            # MsPacman every pellet scores, so resetting here truncated the
+            # return to a single step and destroyed all credit assignment.
             running_add = running_add * gamma + rewards[t]
             discounted_rewards[t] = running_add
 

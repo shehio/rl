@@ -81,8 +81,14 @@ class CNNMultiAction(nn.Module):
         return x
 
     def forward_pass(self, input: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        # Reshape input from (6400,) to (1, input_channels, 80, 80)
-        input_reshaped = input.reshape(1, self.input_channels, 80, 80)
+        # preprocess_pacman_frame_color_aware stacks features with axis=-1 and
+        # ravels, so the flat vector is channels-LAST (80, 80, C). Reshaping it
+        # straight to (1, C, 80, 80) reinterprets interleaved pixels as whole
+        # channel planes and scrambles the conv input. Unpack in the layout it
+        # was written in, then move channels to the front.
+        input_reshaped = np.ascontiguousarray(
+            input.reshape(1, 80, 80, self.input_channels).transpose(0, 3, 1, 2)
+        )
         input_tensor = torch.from_numpy(input_reshaped).float().to(self.device)
 
         with torch.no_grad():
@@ -123,8 +129,11 @@ class CNNMultiAction(nn.Module):
             all_advantages.append(epdlogp)
 
         # Stack inputs and reshape for CNN
-        inputs = np.vstack(all_inputs)  # Shape: (batch_size, input_channels * 80 * 80)
-        inputs = inputs.reshape(-1, self.input_channels, 80, 80)  # Reshape for CNN
+        inputs = np.vstack(all_inputs)  # Shape: (batch_size, 80 * 80 * input_channels)
+        # Channels-last -> channels-first, same as forward_pass.
+        inputs = np.ascontiguousarray(
+            inputs.reshape(-1, 80, 80, self.input_channels).transpose(0, 3, 1, 2)
+        )
 
         inputs = torch.from_numpy(inputs).float().to(self.device)
         hidden = torch.from_numpy(np.vstack(all_hidden)).float().to(self.device)

@@ -102,9 +102,19 @@ class PolicyGradientTrainer:
         return self.game_config.agent_class(policy_network, hyperparams)
 
     def preprocess_state(self, game: Game) -> np.ndarray:
-        """Preprocess the game state."""
+        """Preprocess the game state.
+
+        Games whose preprocessor differences against the previous raw frame
+        (pacman) read it from self.previous_frame, so we have to record the
+        current frame here for the next step. Without this the frame stays None
+        forever and preprocess_pacman_frame_color_aware_difference returns all
+        zeros on every step. Copy because a gymnasium env may hand back a view
+        onto a buffer it reuses.
+        """
         if self.game_config.preprocess_func:
-            return self.game_config.preprocess_func(game, self.previous_frame)
+            state = self.game_config.preprocess_func(game, self.previous_frame)
+            self.previous_frame = np.copy(game.observation)
+            return state
         return game.get_frame_difference()
 
     def post_step(self, game: Game, info: Dict[str, Any]) -> None:
@@ -117,9 +127,9 @@ class PolicyGradientTrainer:
         if self.game_config.post_episode_func:
             self.game_config.post_episode_func(game, agent)
 
-        # Reset frame for next episode (for games that need it)
-        if self.game_name == "pacman":
-            self.previous_frame = None
+        # Never difference across an episode boundary — the first frame of the
+        # new episode has no predecessor.
+        self.previous_frame = None
 
     def train(self):
         """Main training loop."""
